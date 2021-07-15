@@ -14,6 +14,7 @@ namespace PolycomWebApp
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
+                    webBuilder.UseKestrel(kso => kso.ListenAnyIP(5000));
                     webBuilder.UseStartup<Startup>();
                 });
     }
