@@ -9,7 +9,8 @@ namespace PolycomFinal
         {
             // Not sure if the multipart boundry makes any difference... probably doesn't matter
             var httpContent = new MultipartFormDataContent("---------------------------303889579422103152842123901125");
-            byte[] contentBytes = System.Text.Encoding.UTF8.GetBytes("Hello, world! From a text file.");
+            var fileContent = "Hello, world! From a text file.";
+            byte[] contentBytes = System.Text.Encoding.UTF8.GetBytes(fileContent);
 
             // The form name is relevant if you use the UI to add/delete files,
             // but if you just want to upload arbitrary files the form name doesn't matter
