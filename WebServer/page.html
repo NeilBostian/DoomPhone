@@ -1,0 +1,62 @@
+﻿<html>
+<head>
+    <style>
+        body ul li {
+            padding: 5px;
+            margin: 5px;
+        }
+    </style>
+    <script type="text/javascript" src="/jquery"></script>
+    <script>
+        console.log = function (msg) {
+            if (typeof msg !== 'string')
+                msg = JSON.stringify(msg);
+            $("#mylog").append("<div>" + msg + "</div>");
+        };
+
+        window.onerror = function (message, url, linenumber) {
+            console.log("JavaScript error: " + message + " on line " + linenumber + " for " + url);
+        };
+
+        $(document).ready(function () {
+            console.log('Page ready!');
+            //window.PolySoftKey.showToolBar();
+            //window.PolySoftKey.hideToolBar();
+            window.parent.document.body.style.zoom = 0.7;
+
+            $('#file-load-button').click(function () {
+                console.log('Loading file content...');
+                document.getElementById("file-content").innerHTML = "";
+                var file = $("#file-input")[0].files[0];
+
+                if (file.size > 1024 * 8) {
+                    console.log('File is too big, skipping upload. file.size=' + file.size);
+                    return;
+                }
+
+                var fileReader = new FileReader();
+
+                fileReader.onload = function (fileLoadedEvent) {
+                    var textFromFileLoaded = fileLoadedEvent.target.result;
+                    document.getElementById("file-content").innerText = textFromFileLoaded;
+                    console.log('File content loaded successfully. file.name="' + file.name + '", file.size=' + file.size);
+                };
+
+                fileReader.readAsText(file, "UTF-8");
+            });
+        });
+    </script>
+</head>
+<body>
+    <div style="width: 50px; height: 100%; position: fixed; right: 0; top: 0;">
+        <div><a href="/">Reload</a></div>
+    </div>
+    <ul>
+        <!--/usr/local/root-->
+        <li><input id="file-input" type='file' /></li>
+        <li><button id="file-load-button">Load File Content</button></li>
+    </ul>
+    <div id="file-content"></div>
+    <div id="mylog"></div>
+</body>
+</html>
