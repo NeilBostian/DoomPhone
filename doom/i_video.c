@@ -1,4 +1,4 @@
-// Emacs style mode select   -*- C++ -*- 
+// Emacs style mode select   -*- C++ -*-
 //-----------------------------------------------------------------------------
 //
 // $Id:$
@@ -32,6 +32,7 @@ rcsid[] = "$Id: i_x.c,v 1.6 1997/02/03 22:45:10 b1 Exp $";
 #include "d_main.h"
 #include "i_video.h"
 #include "z_zone.h"
+#include <math.h>
 
 #include "tables.h"
 #include "doomkeys.h"
@@ -63,7 +64,7 @@ struct FB_ScreenInfo
 	uint32_t yres_virtual;
 
 	uint32_t bits_per_pixel;		/* guess what			*/
-	
+
 							/* >1 = FOURCC			*/
 	struct FB_BitField red;		/* bitfield in s_Fb mem if true color, */
 	struct FB_BitField green;	/* else only length is significant */
@@ -134,7 +135,7 @@ void cmap_to_rgb565(uint16_t * out, uint8_t * in, int in_pixels)
 
     for (i = 0; i < in_pixels; i++)
     {
-        c = colors[*in]; 
+        c = colors[*in];
         r = ((uint16_t)(c.r >> 3)) << 11;
         g = ((uint16_t)(c.g >> 2)) << 5;
         b = ((uint16_t)(c.b >> 3)) << 0;
@@ -194,7 +195,7 @@ void I_InitGraphics (void)
 	s_Fb.green.offset = 8;
 	s_Fb.red.offset = 16;
 	s_Fb.transp.offset = 24;
-	
+
 
     printf("I_InitGraphics: framebuffer: x_res: %d, y_res: %d, x_virtual: %d, y_virtual: %d, bpp: %d\n",
             s_Fb.xres, s_Fb.yres, s_Fb.xres_virtual, s_Fb.yres_virtual, s_Fb.bits_per_pixel);
@@ -246,49 +247,109 @@ void I_UpdateNoBlit (void)
 {
 }
 
+double clamp(double x, double upper, double lower)
+{
+    if(x < lower) x = lower;
+    if(x > upper) x = upper;
+    return x;
+}
+
+void map_color_from_doom_buffer_scale(int x, int y) {
+    float xf = (float)x/ (float)(DOOMGENERIC_RESX - 1);
+    float doom_buffer_xf = xf * (float)SCREENWIDTH;
+    int doom_buffer_x = (int)floor(doom_buffer_xf);
+
+    float yf = (float)y / (float)(DOOMGENERIC_RESY - 1);
+    float doom_buffer_yf = yf * (float)SCREENHEIGHT;
+    int doom_buffer_y = (int)floor(doom_buffer_yf);
+
+    int doom_buffer_offset = doom_buffer_x + doom_buffer_y * SCREENWIDTH;
+
+    struct color c = colors[I_VideoBuffer[doom_buffer_offset]];
+
+    uint8_t final_r = (uint8_t)clamp(c.r, 255, 0);
+    uint8_t final_g = (uint8_t)clamp(c.g, 255, 0);
+    uint8_t final_b = (uint8_t)clamp(c.b, 255, 0);
+
+    DG_SetPixel(x, y, final_r, final_g, final_b);
+}
+
+void map_color_from_doom_buffer_interp(int x, int y) {
+    float xf = (float)x/ (float)(DOOMGENERIC_RESX - 1);
+    float doom_buffer_xf = xf * (float)SCREENWIDTH;
+    int doom_buffer_x1 = (int)floor(doom_buffer_xf);
+    int doom_buffer_x2 = (int)ceil(doom_buffer_xf);
+    float x1_ratio = doom_buffer_xf - (float)doom_buffer_x1;
+    float x2_ratio = (float)doom_buffer_x2 - doom_buffer_xf;
+
+    float yf = (float)y / (float)(DOOMGENERIC_RESY - 1);
+    float doom_buffer_yf = yf * (float)SCREENHEIGHT;
+    int doom_buffer_y1 = (int)floor(doom_buffer_yf);
+    int doom_buffer_y2 = (int)ceil(doom_buffer_yf);
+    float y1_ratio = doom_buffer_yf - (float)doom_buffer_y1;
+    float y2_ratio = (float)doom_buffer_y2 - doom_buffer_yf;
+
+    int x1y1_offset = doom_buffer_x1 + doom_buffer_y1 * SCREENWIDTH;
+    int x2y1_offset = doom_buffer_x2 + doom_buffer_y1 * SCREENWIDTH;
+    int x1y2_offset = doom_buffer_x1 + doom_buffer_y2 * SCREENWIDTH;
+    int x2y2_offset = doom_buffer_x2 + doom_buffer_y2 * SCREENWIDTH;
+
+    float x1y1_weight = (x1_ratio + y1_ratio) / 2;
+    float x2y1_weight = (x2_ratio + y1_ratio) / 2;
+    float x1y2_weight = (x1_ratio + y2_ratio) / 2;
+    float x2y2_weight = (x2_ratio + y2_ratio) / 2;
+
+    struct color x1y1 = colors[I_VideoBuffer[x1y1_offset]];
+    struct color x2y1 = colors[I_VideoBuffer[x2y1_offset]];
+    struct color x1y2 = colors[I_VideoBuffer[x1y2_offset]];
+    struct color x2y2 = colors[I_VideoBuffer[x2y2_offset]];
+
+    int weighted_r = (int)clamp((float)x1y1.r * x1y1_weight
+        + (float)x2y1.r * x2y1_weight
+        + (float)x1y2.r * x1y2_weight
+        + (float)x2y2.r * x2y2_weight, 255, 0);
+
+    int weighted_g = (int)clamp((float)x1y1.g * x1y1_weight
+        + (float)x2y1.g * x2y1_weight
+        + (float)x1y2.g * x1y2_weight
+        + (float)x2y2.g * x2y2_weight, 255, 0);
+
+    int weighted_b = (int)clamp((float)x1y1.b * x1y1_weight
+        + (float)x2y1.b * x2y1_weight
+        + (float)x1y2.b * x1y2_weight
+        + (float)x2y2.b * x2y2_weight, 255, 0);
+
+    DG_SetPixel(x, y, weighted_r, weighted_g, weighted_b);
+}
+
 //
 // I_FinishUpdate
 //
 
 void I_FinishUpdate (void)
 {
-    int y;
-    int x_offset, y_offset, x_offset_end;
-    unsigned char *line_in, *line_out;
+    // lower-performance, scale video to screen size
+    // int x, y;
+    // for (y = 0; y < DOOMGENERIC_RESY; y++) {
+    //     for(x = 0; x < DOOMGENERIC_RESX; x++) {
+    //         map_color_from_doom_buffer_scale(x, y);
+    //     }
+    // }
 
-    /* Offsets in case FB is bigger than DOOM */
-    /* 600 = s_Fb heigt, 200 screenheight */
-    /* 600 = s_Fb heigt, 200 screenheight */
-    /* 2048 =s_Fb width, 320 screenwidth */
-    y_offset     = (((s_Fb.yres - (SCREENHEIGHT * fb_scaling)) * s_Fb.bits_per_pixel/8)) / 2;
-    x_offset     = (((s_Fb.xres - (SCREENWIDTH  * fb_scaling)) * s_Fb.bits_per_pixel/8)) / 2; // XXX: siglent FB hack: /4 instead of /2, since it seems to handle the resolution in a funny way
-    //x_offset     = 0;
-    x_offset_end = ((s_Fb.xres - (SCREENWIDTH  * fb_scaling)) * s_Fb.bits_per_pixel/8) - x_offset;
+    // high-performance, no scaling
+    int x_offset = 80;
+    int y_offset = 36;
+    int x, y;
+    for (y = 0; y < SCREENHEIGHT; y++) {
+        for (x = 0; x < SCREENWIDTH; x++) {
+            int vb_coord = x + y * SCREENWIDTH;
 
-    /* DRAW SCREEN */
-    line_in  = (unsigned char *) I_VideoBuffer;
-    line_out = (unsigned char *) DG_ScreenBuffer;
+            int dg_coordx = x + x_offset;
+            int dg_coordy = y + y_offset;
 
-    y = SCREENHEIGHT;
-
-    while (y--)
-    {
-        int i;
-        for (i = 0; i < fb_scaling; i++) {
-            line_out += x_offset;
-#ifdef CMAP256
-            for (fb_scaling == 1) {
-                memcpy(line_out, line_in, SCREENWIDTH); /* fb_width is bigger than Doom SCREENWIDTH... */
-            } else {
-                //XXX FIXME fb_scaling support!
-            }
-#else
-            //cmap_to_rgb565((void*)line_out, (void*)line_in, SCREENWIDTH);
-            cmap_to_fb((void*)line_out, (void*)line_in, SCREENWIDTH);
-#endif
-            line_out += (SCREENWIDTH * fb_scaling * (s_Fb.bits_per_pixel/8)) + x_offset_end;
+            struct color c = colors[I_VideoBuffer[vb_coord]];
+            DG_SetPixel(dg_coordx, dg_coordy, c.r, c.g, c.b);
         }
-        line_in += SCREENWIDTH;
     }
 
 	DG_DrawFrame();
@@ -325,7 +386,7 @@ void I_SetPalette (byte* palette)
 
 	//	palette += 3;
 	//}
-    
+
 
     /* performance boost:
      * map to the right pixel format over here! */
