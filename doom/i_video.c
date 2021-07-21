@@ -329,6 +329,9 @@ void map_color_from_doom_buffer_interp(int x, int y) {
 void I_FinishUpdate (void)
 {
     // lower-performance, scale video to screen size
+    // this isn't recommended because it performs
+    // very poorly
+
     // int x, y;
     // for (y = 0; y < DOOMGENERIC_RESY; y++) {
     //     for(x = 0; x < DOOMGENERIC_RESX; x++) {
@@ -336,7 +339,13 @@ void I_FinishUpdate (void)
     //     }
     // }
 
-    // high-performance, no scaling
+    // doom screen is 320x200 and polycom
+    // screen is 480x272, so we add
+    // offsets to screen coordinates to
+    // center doom on the screen.
+    // This is the highest performance since
+    // it doesn't interpolate pixel values
+    // to fill the whole screen
     int x_offset = 80;
     int y_offset = 36;
     int x, y;

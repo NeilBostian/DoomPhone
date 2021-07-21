@@ -7,50 +7,30 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include "m_config.h"
-#include <pthread.h>
 #include <sys/poll.h>
 
+// In-memory framebuffer, we write pixel
+// data to this and once all pixels are
+// written this buffer is flushed into /dev/fb0
 uint8_t PlcmBuffer[BUFFER_SIZE];
 
+// Time DOOM starts, used to track game ticks
 struct timeval start_time;
-//pthread_t thread;
+
+// File pointer for /dev/fb0 frame buffer
 FILE *fb0_file;
+
+// Initial position of /dev/fb0 stream (so we always flush the
+// buffer to the beginning of the file
 fpos_t fb0_initial_pos;
 
-void *buffer_copy(void *ptr);
-
-void PrintDebug()
-{
-	printf("  PlcmBuffer Init:, fb0_file=%i, BUFFER_SIZE=%i, PlcmBuffer=%i, sizeof(PlcmBuffer)=%i\n", (uint32_t)fb0_file, BUFFER_SIZE, (uint32_t)PlcmBuffer, sizeof(PlcmBuffer));
-}
-
+// Init script is run once during DOOM startup
 void DG_Init()
 {
 	gettimeofday(&start_time, 0);
 
 	fb0_file = fopen("/dev/fb0", "w");
 	fgetpos(fb0_file, &fb0_initial_pos);
-
-	printf("------------------------------------------------------------------------------\n");
-	PrintDebug();
-	printf("------------------------------------------------------------------------------\n");
-
-	//pthread_create(&thread, NULL, buffer_copy, NULL);
-}
-
-void flush_buffer()
-{
-	fsetpos(fb0_file, &fb0_initial_pos);
-	fwrite(PlcmBuffer, sizeof(PlcmBuffer), 1, fb0_file);
-	fflush(fb0_file);
-}
-
-void *buffer_copy(void *ptr)
-{
-	while (1)
-	{
-		flush_buffer();
-	}
 }
 
 struct Rgb565 rgb_to_rgb565(uint8_t r, uint8_t g, uint8_t b)
@@ -86,6 +66,10 @@ struct Rgb565 rgb_to_rgb565(uint8_t r, uint8_t g, uint8_t b)
 	return rgb565;
 }
 
+// Sets the pixel at coordinates `x`, `y`
+// to the color defined by r, g, b
+// This only modifies the in-memory buffer
+// and is flushed to the framebuffer by DG_DrawFrame
 void DG_SetPixel(int x, int y, uint32_t r, uint32_t g, uint32_t b)
 {
 	if (x >= DOOMGENERIC_RESX || x < 0 || y >= DOOMGENERIC_RESY || y < 0)
@@ -106,21 +90,31 @@ void DG_SetPixel(int x, int y, uint32_t r, uint32_t g, uint32_t b)
 	//printf("Set pixel%i(%i, %i) = rgb(%i, %i, %i) = Rgb565(0x%02x, 0x%02x), PrevRgb565(0x%02x, 0x%02x)\n", array_offset, x, y, r, g, b, PlcmBuffer[array_offset].b1, PlcmBuffer[array_offset].b2, prev_b1, prev_b2);
 }
 
+// Writes the in-memory PlcmBuffer
+// to /dev/fb0, called at the end
+// of the frame after all pixels
+// are written to the in-memory buffer
 void DG_DrawFrame()
 {
-	flush_buffer();
+	fsetpos(fb0_file, &fb0_initial_pos);
+	fwrite(PlcmBuffer, sizeof(PlcmBuffer), 1, fb0_file);
+	fflush(fb0_file);
 }
 
+// Sleep for the specified amount of time
 void DG_SleepMs(uint32_t ms)
 {
 	usleep(1000 * ms);
 }
 
+// Helper method to compare milliseconds between two timevals
 float timedifference_msec(struct timeval t0, struct timeval t1)
 {
 	return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
+// Return the total number of ticks (1-tick = 1 millisecond)
+// since DOOM started
 uint32_t DG_GetTicksMs()
 {
 	struct timeval now;
@@ -130,6 +124,7 @@ uint32_t DG_GetTicksMs()
 	return (uint32_t)elapsed;
 }
 
+// Maps a polycom keypad driver scancode to DOOM key
 static unsigned char convertToDoomKey(unsigned char scancode)
 {
 	switch (scancode)
@@ -157,6 +152,13 @@ static unsigned char convertToDoomKey(unsigned char scancode)
 	return 0;
 }
 
+// Provides input to DOOM game engine
+// If any keys have been pressed or released since the last frame, this method
+// should return 1. If no key states changed since last frame, this method should
+// return 0. This method is called multiple times per frame until all input changes
+// have been processed.
+// int *pressed -> assign the value in this pointer to 1 if the key was pressed, or 0 if the key was released
+// unsigned char *key -> assign the value in this pointer to the doomkey that was pressed
 int DG_GetKey(int *pressed, unsigned char *key)
 {
 	struct pollfd fds;
@@ -182,6 +184,9 @@ int DG_GetKey(int *pressed, unsigned char *key)
 	return 0;
 }
 
+// Not relevant for doom on the polycom phone.
+// Useful for window APIs like X11 to title
+// the window doom runs inside
 void DG_SetWindowTitle(const char *title)
 {
 }
