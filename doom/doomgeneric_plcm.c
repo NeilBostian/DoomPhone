@@ -55,7 +55,6 @@ struct Rgb565 rgb_to_rgb565(uint8_t r, uint8_t g, uint8_t b)
 
 	b5 = (uint8_t)(r_b * lim5);
 	b5 = b5 > mask5 ? mask5 : b5 & mask5;
-	//printf("DEBUG %i, %i, %i, %i, %i\n", r5, g6, b5, mask5, mask6);
 
 	uint8_t g6_l3 = g6 & 0b00000111;		// green lower3 bits
 	uint8_t g6_h3 = (g6 >> 3) & 0b00000111; // green higher3 bits
@@ -77,17 +76,12 @@ void DG_SetPixel(int x, int y, uint32_t r, uint32_t g, uint32_t b)
 		printf("Error!!\n");
 	}
 
-	int array_offset = x * 2 + (y * 2 * DOOMGENERIC_RESX);
-	uint8_t prev_b1 = PlcmBuffer[array_offset];
-	uint8_t prev_b2 = PlcmBuffer[array_offset + 1];
 	struct Rgb565 pixel = rgb_to_rgb565(r, g, b);
-
+	int array_offset = x * 2 + (y * 2 * DOOMGENERIC_RESX);
 	PlcmBuffer[array_offset] = pixel.b1;
 	PlcmBuffer[array_offset + 1] = pixel.b2;
 	PlcmBuffer[BUFFER_SIZE / 2 + array_offset] = pixel.b1;
 	PlcmBuffer[BUFFER_SIZE / 2 + array_offset + 1] = pixel.b2;
-
-	//printf("Set pixel%i(%i, %i) = rgb(%i, %i, %i) = Rgb565(0x%02x, 0x%02x), PrevRgb565(0x%02x, 0x%02x)\n", array_offset, x, y, r, g, b, PlcmBuffer[array_offset].b1, PlcmBuffer[array_offset].b2, prev_b1, prev_b2);
 }
 
 // Writes the in-memory PlcmBuffer
