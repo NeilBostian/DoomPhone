@@ -8,8 +8,7 @@ set -e
 
 make
 
-# Make sure the destination copy directory exists,
-# remove any pre-existing files
+# Remove pre-existing binary
 ssh_exec "rm -f /usr/local/doom/doom"
 
 # Copy our new executable
